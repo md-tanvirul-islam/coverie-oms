@@ -1,0 +1,71 @@
+# Infra for coverie-oms. Deployed to ~/coverie-oms/ on the VPS — deliberately
+# separate from /var/www/coverie-oms (the app code checkout) so this compose
+# file's .env (Docker/MySQL vars) never collides with Laravel's own .env.
+networks:
+  webnet:
+    external: true
+
+services:
+  oms-mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - webnet
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  oms-php:
+    build:
+      context: ./docker/php
+    restart: unless-stopped
+    working_dir: /var/www/coverie-oms
+    volumes:
+      - /var/www/coverie-oms:/var/www/coverie-oms
+    environment:
+      DB_CONNECTION: mysql
+      DB_HOST: oms-mysql
+      DB_PORT: 3306
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+    depends_on:
+      oms-mysql:
+        condition: service_healthy
+    networks:
+      - webnet
+
+  oms-worker:
+    build:
+      context: ./docker/php
+    restart: unless-stopped
+    working_dir: /var/www/coverie-oms
+    volumes:
+      - /var/www/coverie-oms:/var/www/coverie-oms
+    environment:
+      DB_CONNECTION: mysql
+      DB_HOST: oms-mysql
+      DB_PORT: 3306
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+    command: php artisan queue:work --sleep=3 --tries=3 --timeout=90
+    depends_on:
+      oms-mysql:
+        condition: service_healthy
+    networks:
+      - webnet
+
+volumes:
+  mysql_data:
+    external: true
+    name: oms_oms_mysql_data
