@@ -6,7 +6,9 @@ Deployed to `~/coverie-oms/` on the VPS — a directory separate from `/var/www/
 
 ```bash
 # on the VPS, in ~/coverie-oms/
-docker compose up -d --build
+# -p is required: without it, compose infers the project name from the
+# deploy/ directory itself ("deploy"), not the repo.
+docker compose -p coverie-oms -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
 ```
 
 Requires a `.env` (not committed) with `MYSQL_ROOT_PASSWORD`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` — must match `/var/www/coverie-oms/.env`'s `DB_*` values.
