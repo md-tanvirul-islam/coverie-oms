@@ -21,6 +21,18 @@ Edge routing (`oms.baz360.com` → `oms-php:9000` via Caddy) lives in `coverie-p
 - `chown -R www-data:www-data storage bootstrap/cache` — same reasoning; Laravel needs to write logs/cache/sessions there, and a fresh `git clone` leaves them owned by the host user.
 - Composer isn't a dependency in `vendor/` (gitignored) — run `docker exec <oms-php container> composer install --no-dev --optimize-autoloader --no-interaction` after first build.
 - `php artisan key:generate --force` and `php artisan migrate --force` still need to run once, same as any fresh Laravel install.
+- `docker exec <container> ...` defaults to **root**, not `www-data`. Any command run that way (`composer install`, `php artisan optimize:clear`, `migrate`, etc.) that touches `storage/`, `bootstrap/cache/`, or `vendor/` re-owns those paths to root, and the next real web request 500s with silent (unlogged, since the logger itself can't open its own file) permission-denied errors. After any maintenance `docker exec` run as root, re-run: `docker exec <container> chown -R www-data:www-data storage bootstrap/cache`. Prefer `docker exec --user www-data <container> ...` for artisan/composer commands to avoid this entirely.
+
+## Custom error pages and header hardening
+
+`resources/views/errors/{401,403,404,419,429,500,503,4xx,5xx}.blade.php` (extending a shared `errors/_layout.blade.php`) replace Laravel's stock illustrated error pages. Laravel resolves `errors::{status}`, falling back to `errors::{first-digit}xx`, so the `4xx`/`5xx` templates catch any HTTP status without a dedicated view.
+
+The PHP-FPM image also disables `expose_php` (via `/usr/local/etc/php/conf.d/zz-security.ini`), which removes the `X-Powered-By: PHP/x.x.x` header; Caddy strips the `Via` header it would otherwise add. Together these stop the stack from fingerprinting itself to the outside world. Verify after any change:
+
+```bash
+curl -sI https://oms.baz360.com/ | grep -iE 'x-powered-by|^via'   # should print nothing
+curl -s https://oms.baz360.com/does-not-exist                     # should show the custom 404, not Laravel's
+```
 
 ## Verifying the queue worker actually processes jobs
 
