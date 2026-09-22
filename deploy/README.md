@@ -41,8 +41,10 @@ curl -s https://oms.baz360.com/does-not-exist                     # should show 
 A 429 renders through the custom `errors/429.blade.php` view automatically. Verify:
 
 ```bash
-for i in $(seq 1 125); do curl -s -o /dev/null -w "%{http_code}\n" https://oms.baz360.com/; done | sort | uniq -c
-# expect ~120 200s then 429s
+seq 1 150 | xargs -P 30 -I{} curl -s -o /dev/null -w "%{http_code}\n" https://oms.baz360.com/ | sort | uniq -c
+# expect ~120 200s then 429s — use -P (parallel) over a real network link, a
+# sequential loop can take >60s and let the 1-minute window reset mid-test,
+# making the limiter look like it never trips even though it's working fine
 ```
 
 ## Verifying the queue worker actually processes jobs
