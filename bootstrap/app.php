@@ -13,9 +13,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->web(append: [
-            TeamsPermission::class,
-        ]);
+        $middleware->web(
+            prepend: ['throttle:120,1'],
+            append: [TeamsPermission::class],
+        );
+        $middleware->api(prepend: ['throttle:60,1']);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
