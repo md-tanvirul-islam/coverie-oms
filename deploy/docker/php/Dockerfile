@@ -15,5 +15,12 @@ RUN sed -i \
         -e 's/^listen = .*/listen = 0.0.0.0:9000/' \
         /usr/local/etc/php-fpm.d/www.conf
 
+# Don't leak the PHP version / display raw errors to the outside world.
+RUN { \
+        echo 'expose_php = Off'; \
+        echo 'display_errors = Off'; \
+        echo 'display_startup_errors = Off'; \
+    } > /usr/local/etc/php/conf.d/zz-security.ini
+
 WORKDIR /var/www/coverie-oms
 EXPOSE 9000
