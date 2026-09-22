@@ -34,6 +34,17 @@ curl -sI https://oms.baz360.com/ | grep -iE 'x-powered-by|^via'   # should print
 curl -s https://oms.baz360.com/does-not-exist                     # should show the custom 404, not Laravel's
 ```
 
+## Rate limiting
+
+`bootstrap/app.php` applies `throttle:120,1` (120 req/min per route, per authenticated user or IP) to the `web` group and `throttle:60,1` to `api`. This is Laravel's built-in `ThrottleRequests` middleware in its basic (non-named-limiter) form, so it needs no `RateLimiter::for(...)` registration. Each route gets its own bucket (Laravel keys by `sha1(method|uri|user_id_or_ip)`), so hammering one endpoint doesn't burn another's budget. The existing login-attempt throttle in `app/Http/Requests/Auth/LoginRequest.php` (5 attempts, keyed by email+IP) is separate and untouched.
+
+A 429 renders through the custom `errors/429.blade.php` view automatically. Verify:
+
+```bash
+for i in $(seq 1 125); do curl -s -o /dev/null -w "%{http_code}\n" https://oms.baz360.com/; done | sort | uniq -c
+# expect ~120 200s then 429s
+```
+
 ## Verifying the queue worker actually processes jobs
 
 `tinker`'s `dispatch(function () {...})` fails to serialize closures defined in its own eval context (`file_get_contents(eval()'d code): No such file`) — this is a `tinker` limitation, not a worker bug. To verify `oms-worker` end-to-end, dispatch a real job class instead:
